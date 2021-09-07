@@ -199,3 +199,188 @@ Section Var.
   }}.
 
 End Var.
+
+Section Examples.
+  Require Import coqutil.Tactics.Tactics.
+
+  Require Import Cava.Expr.
+  Require Import Cava.ExprProperties.
+  Require Import Cava.Primitives.
+  Require Import Cava.Semantics.
+  Require Import Cava.Types.
+  Require Import Cava.Util.Identity.
+  Require Import Cava.Util.If.
+  Require Import Cava.Util.List.
+  Require Import Cava.Util.Nat.
+  Require Import Cava.Util.Tactics.
+
+  Import ListNotations.
+
+  Example ex_outstanding_true : forall reg_count regs,
+      forall a_valid a_opcode a_param a_size a_source a_address a_mask a_data a_user d_ready,
+      forall reqid reqsz rspop error outstanding we_o re_o,
+      forall reqid' reqsz' rspop' error' outstanding' we_o' re_o',
+      forall d_valid d_opcode d_param d_size d_source d_sink d_data d_user d_error a_ready,
+      forall write address write_data write_mask,
+        outstanding = true ->
+        Semantics.step (tlul_adapter_reg (reg_count:=reg_count))
+                       (reqid, (reqsz, (rspop, (error, (outstanding, (we_o, re_o))))))
+                       ((a_valid,
+                         (a_opcode,
+                          (a_param,
+                           (a_size,
+                            (a_source,
+                             (a_address,
+                              (a_mask,
+                               (a_data,
+                                (a_user,
+                                 d_ready))))))))),
+                        (regs, tt)) =
+        ((reqid', (reqsz', (rspop', (error', (outstanding', (we_o', re_o')))))),
+         ((d_valid, (d_opcode, (d_param, (d_size, (d_source, (d_sink, (d_data, (d_user, (d_error, a_ready))))))))),
+          (write, (address, (write_data, write_mask))))) ->
+        (reqid'       = reqid /\
+         reqsz'       = reqsz /\
+         rspop'       = rspop /\
+         error'       = error /\
+         outstanding' = negb d_ready /\
+         we_o'        = false /\
+         re_o'        = false /\
+         (**)
+         d_valid      = negb d_ready /\
+         d_opcode     = rspop /\
+         d_param      = 0%N /\
+         d_size       = reqsz /\
+         d_source     = reqid /\
+         d_sink       = 0%N /\
+         (* d_data       = ? /\ *)
+         d_user       = 0%N /\
+         d_error      = error /\
+         a_ready      = d_ready /\
+         (**)
+         write        = false /\
+         address      = a_address /\
+         write_data   = a_data /\
+         write_mask   = a_mask).
+  Proof.
+    intros. subst.
+    match goal with
+    | H: context [ step ] |- _ => cbn in H
+    end.
+    boolsimpl_hyps.
+    logical_simplify.
+    rewrite <- Bool.if_negb. rewrite <- Bool.andb_lazy_alt. boolsimpl_hyps.
+    ssplit; reflexivity.
+  Qed.
+
+  Example ex_outstanding_false_a_valid_true : forall reg_count regs,
+      forall a_valid a_opcode a_param a_size a_source a_address a_mask a_data a_user d_ready,
+      forall reqid reqsz rspop error outstanding we_o re_o,
+      forall reqid' reqsz' rspop' error' outstanding' we_o' re_o',
+      forall d_valid d_opcode d_param d_size d_source d_sink d_data d_user d_error a_ready,
+      forall write address write_data write_mask,
+        outstanding = false ->
+        a_valid = true ->
+        Semantics.step (tlul_adapter_reg (reg_count:=reg_count))
+                       (reqid, (reqsz, (rspop, (error, (outstanding, (we_o, re_o))))))
+                       ((a_valid,
+                         (a_opcode,
+                          (a_param,
+                           (a_size,
+                            (a_source,
+                             (a_address,
+                              (a_mask,
+                               (a_data,
+                                (a_user,
+                                 d_ready))))))))),
+                        (regs, tt)) =
+        ((reqid', (reqsz', (rspop', (error', (outstanding', (we_o', re_o')))))),
+         ((d_valid, (d_opcode, (d_param, (d_size, (d_source, (d_sink, (d_data, (d_user, (d_error, a_ready))))))))),
+          (write, (address, (write_data, write_mask))))) ->
+        (reqid'       = a_source /\
+         reqsz'       = a_size /\
+         rspop'       = (if a_opcode =? 4 then 1 else 0) /\
+         error'       = false /\
+         outstanding' = true /\
+         we_o'        = ((a_opcode =? 0) || (a_opcode =? 1))%bool /\
+         re_o'        = (a_opcode =? 4) /\
+         (**)
+         d_valid      = true /\
+         d_opcode     = (if a_opcode =? 4 then 1 else 0) /\
+         d_param      = 0 /\
+         d_size       = a_size /\
+         d_source     = a_source /\
+         d_sink       = 0 /\
+         (* d_data      ? /\ *)
+         d_user       = 0 /\
+         d_error      = false /\
+         a_ready      = false /\
+         (**)
+         write        = ((a_opcode =? 0) || (a_opcode =? 1))%bool /\
+         address      = a_address /\
+         write_data   = a_data /\
+         write_mask   = a_mask)%N.
+  Proof.
+    intros. subst.
+    match goal with
+    | H: context [ step ] |- _ => cbn in H
+    end.
+    logical_simplify. boolsimpl. ssplit; reflexivity.
+  Qed.
+
+  Example ex_outstanding_false_a_valid_false : forall reg_count regs,
+      forall a_valid a_opcode a_param a_size a_source a_address a_mask a_data a_user d_ready,
+      forall reqid reqsz rspop error outstanding we_o re_o,
+      forall reqid' reqsz' rspop' error' outstanding' we_o' re_o',
+      forall d_valid d_opcode d_param d_size d_source d_sink d_data d_user d_error a_ready,
+      forall write address write_data write_mask,
+        outstanding = false ->
+        a_valid = false ->
+        Semantics.step (tlul_adapter_reg (reg_count:=reg_count))
+                       (reqid, (reqsz, (rspop, (error, (outstanding, (we_o, re_o))))))
+                       ((a_valid,
+                         (a_opcode,
+                          (a_param,
+                           (a_size,
+                            (a_source,
+                             (a_address,
+                              (a_mask,
+                               (a_data,
+                                (a_user,
+                                 d_ready))))))))),
+                        (regs, tt)) =
+        ((reqid', (reqsz', (rspop', (error', (outstanding', (we_o', re_o')))))),
+         ((d_valid, (d_opcode, (d_param, (d_size, (d_source, (d_sink, (d_data, (d_user, (d_error, a_ready))))))))),
+          (write, (address, (write_data, write_mask))))) ->
+        (reqid'       = reqid /\
+         reqsz'       = reqsz /\
+         rspop'       = rspop /\
+         error'       = error /\
+         outstanding' = false /\
+         we_o'        = false /\
+         re_o'        = false /\
+         (**)
+         d_valid      = false /\
+         d_opcode     = rspop /\
+         d_param      = 0%N /\
+         d_size       = reqsz /\
+         d_source     = reqid /\
+         d_sink       = 0%N /\
+         (* d_data       = ? /\ *)
+         d_user       = 0%N /\
+         d_error      = error /\
+         a_ready      = true /\
+         (**)
+         write        = false /\
+         address      = a_address /\
+         write_data   = a_data /\
+         write_mask   = a_mask).
+  Proof.
+    intros. subst.
+    match goal with
+    | H: context [ step ] |- _ =>
+      cbn in H
+    end.
+    logical_simplify. ssplit; reflexivity.
+  Qed.
+End Examples.
